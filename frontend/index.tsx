@@ -2,14 +2,28 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
-}
+document.addEventListener('DOMContentLoaded', () => {
+  const containers = document.querySelectorAll<HTMLElement>('.cdb-quizz-container');
 
-const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+  const renderApp = (element: HTMLElement, slug: string) => {
+    const root = ReactDOM.createRoot(element);
+    root.render(
+      <React.StrictMode>
+        <App slug={slug} />
+      </React.StrictMode>
+    );
+  };
+
+  if (containers.length > 0) {
+    containers.forEach(container => {
+      const slug = container.dataset.slug || 'demo';
+      renderApp(container, slug);
+    });
+    return;
+  }
+
+  const rootElement = document.getElementById('root');
+  if (rootElement) {
+    renderApp(rootElement, 'demo');
+  }
+});
