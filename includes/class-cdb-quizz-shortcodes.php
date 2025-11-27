@@ -15,6 +15,15 @@ class CDB_Quizz_Shortcodes {
      * Enqueue frontend assets for the shortcode.
      */
     public function enqueue_assets() {
+        wp_register_style(
+            'cdb-quizz-frontend',
+            CDB_QUIZZ_PLUGIN_URL . 'assets/css/cdb-quizz-frontend.css',
+            array(),
+            CDB_QUIZZ_VERSION
+        );
+
+        wp_enqueue_style( 'cdb-quizz-frontend' );
+
         wp_register_script(
             'cdb-quizz-frontend',
             CDB_QUIZZ_PLUGIN_URL . 'assets/js/cdb-quizz-frontend.js',

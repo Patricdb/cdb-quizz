@@ -1,0 +1,12 @@
+.cdb-quizz-container button {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid #222;
+    background: #faf3dd;
+    cursor: pointer;
+}
+
+.cdb-quizz-status {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+}
