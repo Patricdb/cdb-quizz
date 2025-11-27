@@ -97,6 +97,34 @@ class CDB_Quizz_REST {
     /**
      * Handle generate endpoint.
      *
+     * Expected parameters (POST):
+     * - slug (string, required): quiz identifier.
+     *
+     * Response structure example:
+     * array(
+     *   'ok'                  => true,
+     *   'slug'                => 'demo',
+     *   'quizz_definicion_id' => 12,
+     *   'app_mode'            => 'CULTURA',
+     *   'language'            => 'es',
+     *   'topic'               => 'Concepto CdB',
+     *   'source'              => 'mock' or 'gemini',
+     *   'questions'           => array(
+     *       array(
+     *           'id'            => 'q1',
+     *           'questionText'  => '...',
+     *           'options'       => array( '...', '...', '...', '...' ),
+     *           'correctAnswer' => '...',
+     *           'explanation'   => '...',
+     *           'difficulty'    => 'easy',
+     *       ),
+     *   ),
+     * );
+     *
+     * Notes:
+     * - If there is no definition for the slug or Gemini fails (no API key, HTTP error, invalid payload),
+     *   the response will use 'source' => 'mock' and questions from the internal mock.
+     *
      * @param WP_REST_Request $request REST request instance.
      * @return WP_REST_Response
      */
@@ -130,11 +158,7 @@ class CDB_Quizz_REST {
             $topic               = $definicion->default_topic ? $definicion->default_topic : $topic;
         }
 
-        if (
-            $definicion
-            && defined( 'CDB_QUIZZ_GEMINI_API_KEY' )
-            && CDB_QUIZZ_GEMINI_API_KEY
-        ) {
+        if ( $definicion ) {
             $client = new CDB_Quizz_Gemini();
 
             $result = $client->generate_questions(
