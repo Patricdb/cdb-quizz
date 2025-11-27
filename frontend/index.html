@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GastroPolyglot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+      
+      body {
+        font-family: 'Space Grotesk', sans-serif;
+        background-color: #FAF8EE;
+        overscroll-behavior: none;
+        color: #1F2937; /* Dark Charcoal instead of pure black */
+      }
+      
+      h1, h2, h3 {
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      /* Hide scrollbar for clean UI */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+
+      /* Elegant Retro Shadows */
+      .shadow-retro {
+        box-shadow: 3px 3px 0px 0px #1F2937;
+      }
+      .shadow-retro-sm {
+        box-shadow: 2px 2px 0px 0px #1F2937;
+      }
+      .shadow-retro-none {
+        box-shadow: 0px 0px 0px 0px transparent;
+      }
+      
+      /* Refined Text Shadow */
+      .text-outline {
+        text-shadow: 
+          -0.5px -0.5px 0 #1F2937,  
+           0.5px -0.5px 0 #1F2937,
+          -0.5px  0.5px 0 #1F2937,
+           0.5px  0.5px 0 #1F2937;
+      }
+
+      /* Custom border width for elegance */
+      .border-2-charcoal {
+        border-width: 2px;
+        border-color: #1F2937;
+      }
+
+      /* --- Animations --- */
+
+      @keyframes shake-horizontal {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+        20%, 40%, 60%, 80% { transform: translateX(4px); }
+      }
+
+      @keyframes scale-up-bounce {
+        0% { transform: scale(0.5); opacity: 0; }
+        50% { transform: scale(1.1); opacity: 1; }
+        70% { transform: scale(0.95); }
+        100% { transform: scale(1); }
+      }
+
+      @keyframes slide-up-fade {
+        0% { transform: translateY(20px); opacity: 0; }
+        100% { transform: translateY(0); opacity: 1; }
+      }
+
+      @keyframes slide-out-to-top {
+        0% { transform: translateY(0); opacity: 1; }
+        100% { transform: translateY(-120%); opacity: 0; }
+      }
+
+      @keyframes wave-stretch {
+        0%, 100% { transform: scaleY(1); }
+        50% { transform: scaleY(2.5); }
+      }
+      
+      @keyframes float-up-fade {
+        0% { transform: translateY(0) scale(1); opacity: 1; }
+        100% { transform: translateY(-20px) scale(1.2); opacity: 0; }
+      }
+      
+      @keyframes pulse-red {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(224, 122, 95, 0.7); }
+        70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(224, 122, 95, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(224, 122, 95, 0); }
+      }
+
+      .animate-shake {
+        animation: shake-horizontal 0.5s cubic-bezier(0.455, 0.030, 0.515, 0.955) both;
+      }
+
+      .animate-pop {
+        animation: scale-up-bounce 0.5s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
+      }
+
+      .animate-slide-up {
+        animation: slide-up-fade 0.4s ease-out both;
+      }
+
+      .animate-slide-out-top {
+        animation: slide-out-to-top 0.4s ease-in both;
+      }
+      
+      .animate-float-score {
+        animation: float-up-fade 0.8s ease-out forwards;
+      }
+      
+      .animate-opponent-score {
+        animation: pulse-red 0.4s ease-out;
+      }
+
+      /* Reduced Motion Support */
+      .motion-reduce *, 
+      .motion-reduce *::before, 
+      .motion-reduce *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

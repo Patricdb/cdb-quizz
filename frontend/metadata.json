@@ -1,0 +1,7 @@
+{
+  "name": "CdB_ Quizz",
+  "description": "App de trivia para hostelería con 5 modos temáticos (Idiomas, Cerveza, Vino, Licor 43, Cultura de Bar), sistema de niveles, ranking y dificultad variada.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
