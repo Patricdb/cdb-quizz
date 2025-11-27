@@ -144,6 +144,18 @@ class CDB_Quizz_REST {
     /**
      * Handle finish endpoint.
      *
+     * Expected parameters: slug (string), score (float), app_mode (string), questions (array), history (array).
+     * Each history entry should minimally include:
+     * array(
+     *  'questionId'     => 'q1',
+     *  'selectedAnswer' => 'Opción X',
+     *  'correct'        => true,
+     * ).
+     *
+     * Currently persisted columns in wp_cdb_quizz_intentos: quizz_definicion_id, user_id, app_mode,
+     * questions_payload, history, score, completado, created_at, updated_at.
+     * Reserved for future iterations: language, topic, duracion_segundos, xp_ganada, nivel_al_cerrar, used_sources.
+     *
      * @param WP_REST_Request $request REST request instance.
      * @return WP_REST_Response|WP_Error
      */
@@ -152,10 +164,18 @@ class CDB_Quizz_REST {
 
         $table    = $wpdb->prefix . 'cdb_quizz_intentos';
         $slug     = $request->get_param( 'slug' );
-        $score    = $request->get_param( 'score' );
+        $score    = floatval( $request->get_param( 'score' ) );
         $questions = $request->get_param( 'questions' );
         $history   = $request->get_param( 'history' );
         $app_mode  = $request->get_param( 'app_mode' );
+
+        if ( ! is_array( $questions ) || empty( $questions ) ) {
+            $questions = array();
+        }
+
+        if ( ! is_array( $history ) || empty( $history ) ) {
+            $history = array();
+        }
 
         $quizz_definicion_id = 0;
 
