@@ -66,6 +66,51 @@
         });
 
         container.appendChild(list);
+
+        const finishButton = document.createElement('button');
+        finishButton.type = 'button';
+        finishButton.textContent = 'Registrar intento de prueba';
+
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'cdb-quizz-status';
+
+        finishButton.addEventListener('click', async () => {
+            const history = questions.map((question) => ({
+                questionId: question.id,
+                selectedAnswer: question.correctAnswer,
+                correctAnswer: question.correctAnswer,
+                isCorrect: true,
+            }));
+
+            try {
+                const response = await fetch(`${cdbQuizzSettings.restUrl}cdb-quizz/v1/finish`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        slug,
+                        score: 100,
+                        app_mode: 'CULTURA',
+                        questions,
+                        history,
+                    }),
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result && result.ok === true && result.intento_id) {
+                    statusDiv.textContent = `Intento guardado con ID: ${result.intento_id}`;
+                } else {
+                    statusDiv.textContent = 'No se ha podido guardar el intento.';
+                }
+            } catch (error) {
+                statusDiv.textContent = 'No se ha podido guardar el intento.';
+            }
+        });
+
+        container.appendChild(finishButton);
+        container.appendChild(statusDiv);
     }
 
     document.addEventListener('DOMContentLoaded', () => {
