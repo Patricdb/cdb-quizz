@@ -4,6 +4,40 @@
  */
 class CDB_Quizz_REST {
     /**
+     * Returns the default mock questions used when Gemini or DB are not available.
+     *
+     * @return array
+     */
+    private function get_mock_questions() {
+        return array(
+            array(
+                'id'            => 'q1',
+                'questionText'  => 'What is the capital of France?',
+                'options'       => array( 'Paris', 'Berlin', 'Madrid', 'Rome' ),
+                'correctAnswer' => 'Paris',
+                'explanation'   => 'Paris is the capital and most populous city of France.',
+                'difficulty'    => 'easy',
+            ),
+            array(
+                'id'            => 'q2',
+                'questionText'  => 'Which planet is known as the Red Planet?',
+                'options'       => array( 'Earth', 'Mars', 'Jupiter', 'Saturn' ),
+                'correctAnswer' => 'Mars',
+                'explanation'   => 'Mars is often called the “Red Planet” because of its reddish appearance.',
+                'difficulty'    => 'medium',
+            ),
+            array(
+                'id'            => 'q3',
+                'questionText'  => 'In which year did the World War II end?',
+                'options'       => array( '1940', '1942', '1945', '1948' ),
+                'correctAnswer' => '1945',
+                'explanation'   => 'World War II ended in 1945 with the surrender of the Axis powers.',
+                'difficulty'    => 'medium',
+            ),
+        );
+    }
+
+    /**
      * Hook REST route registration.
      */
     public function __construct() {
@@ -69,72 +103,65 @@ class CDB_Quizz_REST {
     public function handle_generate( WP_REST_Request $request ) {
         global $wpdb;
 
-        $slug = sanitize_text_field( $request->get_param( 'slug' ) );
+        $slug = $request->get_param( 'slug' );
+        if ( empty( $slug ) ) {
+            $slug = 'demo';
+        }
 
+        $questions           = $this->get_mock_questions();
+        $quizz_definicion_id = null;
+        $app_mode            = 'CULTURA';
+        $language            = 'es';
+        $topic               = null;
+        $source              = 'mock';
+
+        $table_def  = $wpdb->prefix . 'cdb_quizz_definicion';
         $definicion = $wpdb->get_row(
             $wpdb->prepare(
-                "SELECT id, app_mode, default_language, default_topic, max_preguntas, config_ia FROM {$wpdb->prefix}cdb_quizz_definicion WHERE slug = %s LIMIT 1",
+                "SELECT * FROM {$table_def} WHERE slug = %s LIMIT 1",
                 $slug
             )
         );
 
-        if ( ! $definicion ) {
-            return new WP_Error( 'cdb_quizz_not_found', __( 'Quizz definition not found.', 'cdb-quizz' ), array( 'status' => 404 ) );
+        if ( $definicion ) {
+            $quizz_definicion_id = (int) $definicion->id;
+            $app_mode            = $definicion->app_mode ? $definicion->app_mode : $app_mode;
+            $language            = $definicion->default_language ? $definicion->default_language : $language;
+            $topic               = $definicion->default_topic ? $definicion->default_topic : $topic;
         }
 
-        $questions = array(
-            array(
-                'id'             => 'q1',
-                'questionText'   => 'What is the capital of France?',
-                'options'        => array( 'Paris', 'Berlin', 'Madrid', 'Rome' ),
-                'correctAnswer'  => 'Paris',
-                'explanation'    => 'Paris is the capital and most populous city of France.',
-                'difficulty'     => 'easy',
-            ),
-            array(
-                'id'             => 'q2',
-                'questionText'   => 'Which planet is known as the Red Planet?',
-                'options'        => array( 'Earth', 'Mars', 'Jupiter', 'Saturn' ),
-                'correctAnswer'  => 'Mars',
-                'explanation'    => 'Mars is often called the “Red Planet” because of its reddish appearance.',
-                'difficulty'     => 'medium',
-            ),
-            array(
-                'id'             => 'q3',
-                'questionText'   => 'In which year did the World War II end?',
-                'options'        => array( '1940', '1942', '1945', '1948' ),
-                'correctAnswer'  => '1945',
-                'explanation'    => 'World War II ended in 1945 with the surrender of the Axis powers.',
-                'difficulty'     => 'medium',
-            ),
-        );
+        if (
+            $definicion
+            && defined( 'CDB_QUIZZ_GEMINI_API_KEY' )
+            && CDB_QUIZZ_GEMINI_API_KEY
+        ) {
+            $client = new CDB_Quizz_Gemini();
 
-        if ( defined( 'CDB_QUIZZ_GEMINI_API_KEY' ) && CDB_QUIZZ_GEMINI_API_KEY ) {
-            $gemini = new CDB_Quizz_Gemini();
-
-            $generated_questions = $gemini->generate_questions(
+            $result = $client->generate_questions(
                 array(
-                    'language'      => $definicion->default_language ? $definicion->default_language : 'es',
-                    'topic'         => $definicion->default_topic,
-                    'max_preguntas' => $definicion->max_preguntas ? (int) $definicion->max_preguntas : 3,
-                    'app_mode'      => $definicion->app_mode,
+                    'slug'           => $slug,
+                    'app_mode'       => $app_mode,
+                    'language'       => $language,
+                    'topic'          => $topic,
+                    'max_preguntas'  => (int) $definicion->max_preguntas,
+                    'config_ia'      => $definicion->config_ia,
                 )
             );
 
-            if ( ! is_wp_error( $generated_questions ) && ! empty( $generated_questions ) ) {
-                $questions = $generated_questions;
-            } elseif ( is_wp_error( $generated_questions ) ) {
-                error_log( 'CDB_Quizz_Gemini error: ' . $generated_questions->get_error_message() );
+            if ( ! is_wp_error( $result ) && ! empty( $result['questions'] ) && is_array( $result['questions'] ) ) {
+                $questions = $result['questions'];
+                $source    = 'gemini';
             }
         }
 
         $response = array(
             'ok'                  => true,
             'slug'                => $slug,
-            'quizz_definicion_id' => (int) $definicion->id,
-            'app_mode'            => $definicion->app_mode,
-            'language'            => $definicion->default_language ? $definicion->default_language : 'es',
-            'topic'               => $definicion->default_topic,
+            'quizz_definicion_id' => $quizz_definicion_id,
+            'app_mode'            => $app_mode,
+            'language'            => $language,
+            'topic'               => $topic,
+            'source'              => $source,
             'questions'           => $questions,
         );
 
