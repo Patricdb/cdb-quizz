@@ -14,6 +14,10 @@ class CDB_Quizz_Gemini {
             return new WP_Error( 'cdb_quizz_no_api_key', __( 'Gemini API key is not configured.', 'cdb-quizz' ) );
         }
 
+        if ( '' === trim( CDB_QUIZZ_GEMINI_API_KEY ) ) {
+            return new WP_Error( 'cdb_quizz_no_api_key', __( 'Gemini API key is not configured.', 'cdb-quizz' ) );
+        }
+
         $language      = ! empty( $args['language'] ) ? $args['language'] : 'es';
         $topic         = isset( $args['topic'] ) ? $args['topic'] : '';
         $max_preguntas = ! empty( $args['max_preguntas'] ) ? (int) $args['max_preguntas'] : 3;
@@ -81,13 +85,22 @@ class CDB_Quizz_Gemini {
             return new WP_Error( 'cdb_quizz_gemini_parse_error', __( 'Unable to parse Gemini API response.', 'cdb-quizz' ) );
         }
 
-        $questions_json = $this->extract_questions_json( $decoded );
-        if ( is_wp_error( $questions_json ) ) {
-            return $questions_json;
+        $questions_data = array();
+        if ( isset( $decoded['questions'] ) && is_array( $decoded['questions'] ) ) {
+            $questions_data = $decoded;
+        } else {
+            $questions_json = $this->extract_questions_json( $decoded );
+            if ( is_wp_error( $questions_json ) ) {
+                return $questions_json;
+            }
+
+            $questions_data = json_decode( $questions_json, true );
+            if ( null === $questions_data ) {
+                return new WP_Error( 'cdb_quizz_gemini_parse_error', __( 'Unable to parse Gemini API response.', 'cdb-quizz' ) );
+            }
         }
 
-        $questions_data = json_decode( $questions_json, true );
-        if ( null === $questions_data || empty( $questions_data['questions'] ) || ! is_array( $questions_data['questions'] ) ) {
+        if ( empty( $questions_data['questions'] ) || ! is_array( $questions_data['questions'] ) ) {
             return new WP_Error( 'cdb_quizz_invalid_ai_payload', __( 'Gemini response does not contain valid questions.', 'cdb-quizz' ) );
         }
 
@@ -114,10 +127,10 @@ class CDB_Quizz_Gemini {
         $app_mode   = $app_mode ? sprintf( 'Modo de aplicación: %s.', $app_mode ) : '';
 
         $prompt = sprintf(
-            'Genera hasta %1$d preguntas de opción múltiple %2$s en idioma %3$s. %4$s Cada pregunta debe incluir id único, questionText, exactamente cuatro options de texto, correctAnswer, explanation y difficulty. Responde solo con un JSON con esta forma exacta: {"questions": [{"id": "q1", "questionText": "...", "options": ["...", "...", "...", "..."], "correctAnswer": "...", "explanation": "...", "difficulty": "easy"}]}. No añadas texto adicional fuera del JSON.',
+            'Eres un generador de quizzes. Idioma: %1$s. Genera como máximo %2$d preguntas de opción múltiple %3$s. %4$s Devuelve únicamente JSON válido con esta estructura exacta (sin texto adicional): {"questions": [{"id": "q1", "questionText": "...", "options": ["...", "...", "...", "..."], "correctAnswer": "...", "explanation": "...", "difficulty": "easy|medium|hard"}]}. Cada pregunta debe tener exactamente cuatro opciones de texto, un id único, correctAnswer, explanation, difficulty y puede incluir tags opcionales.',
+            $language,
             $max_preguntas,
             $topic_text,
-            $language,
             $app_mode
         );
 
@@ -163,14 +176,21 @@ class CDB_Quizz_Gemini {
             $options = array_values( (array) ( $question['options'] ?? array() ) );
             $options = array_map( 'strval', $options );
 
-            $normalized[] = array(
+            $question_text = (string) ( $question['questionText'] ?? ( $question['text'] ?? '' ) );
+
+            $normalized_item = array(
                 'id'            => (string) ( $question['id'] ?? '' ),
-                'questionText'  => (string) ( $question['questionText'] ?? ( $question['text'] ?? '' ) ),
+                'questionText'  => $question_text,
                 'options'       => $options,
                 'correctAnswer' => isset( $question['correctAnswer'] ) ? (string) $question['correctAnswer'] : '',
                 'explanation'   => isset( $question['explanation'] ) ? (string) $question['explanation'] : '',
                 'difficulty'    => isset( $question['difficulty'] ) ? (string) $question['difficulty'] : '',
+                'tags'          => isset( $question['tags'] ) ? array_values( (array) $question['tags'] ) : array(),
             );
+
+            if ( '' !== trim( $normalized_item['questionText'] ) && ! empty( $normalized_item['options'] ) ) {
+                $normalized[] = $normalized_item;
+            }
         }
 
         return $normalized;
