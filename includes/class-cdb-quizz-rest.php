@@ -217,16 +217,20 @@ class CDB_Quizz_REST {
      * Handle finish endpoint.
      *
      * Expected parameters: slug (string), score (float), app_mode (string), questions (array), history (array).
+     * Optional parameters: language (string), topic (string), duration_seconds (int|float).
      * Each history entry should minimally include:
      * array(
-     *  'questionId'     => 'q1',
-     *  'selectedAnswer' => 'Opción X',
-     *  'correct'        => true,
+     *  'questionId'        => 'q1',
+     *  'selectedIndex'     => 0,
+     *  'selectedAnswer'    => 'Paris',
+     *  'correctAnswer'     => 'Paris',
+     *  'isCorrect'         => true,
+     *  'timeSpentSeconds'  => 12, // optional
      * ).
      *
      * Currently persisted columns in wp_cdb_quizz_intentos: quizz_definicion_id, user_id, app_mode,
-     * questions_payload, history, score, completado, created_at, updated_at.
-     * Reserved for future iterations: language, topic, duracion_segundos, xp_ganada, nivel_al_cerrar, used_sources.
+     * language, topic, questions_payload, history, score, duracion_segundos, completado, created_at, updated_at.
+     * Reserved for future iterations: xp_ganada, nivel_al_cerrar, used_sources.
      *
      * @param WP_REST_Request $request REST request instance.
      * @return WP_REST_Response|WP_Error
@@ -234,12 +238,15 @@ class CDB_Quizz_REST {
     public function handle_finish( WP_REST_Request $request ) {
         global $wpdb;
 
-        $table    = $wpdb->prefix . 'cdb_quizz_intentos';
-        $slug     = $request->get_param( 'slug' );
-        $score    = floatval( $request->get_param( 'score' ) );
-        $questions = $request->get_param( 'questions' );
-        $history   = $request->get_param( 'history' );
-        $app_mode  = $request->get_param( 'app_mode' );
+        $table             = $wpdb->prefix . 'cdb_quizz_intentos';
+        $slug              = $request->get_param( 'slug' );
+        $score             = floatval( $request->get_param( 'score' ) );
+        $questions         = $request->get_param( 'questions' );
+        $history           = $request->get_param( 'history' );
+        $app_mode          = $request->get_param( 'app_mode' );
+        $language          = $request->get_param( 'language' );
+        $topic             = $request->get_param( 'topic' );
+        $duration_seconds  = $request->get_param( 'duration_seconds' );
 
         if ( ! is_array( $questions ) || empty( $questions ) ) {
             $questions = array();
@@ -260,21 +267,36 @@ class CDB_Quizz_REST {
             );
         }
 
-        $inserted = $wpdb->insert(
-            $table,
-            array(
-                'quizz_definicion_id' => $quizz_definicion_id,
-                'user_id'             => get_current_user_id(),
-                'app_mode'            => $app_mode ? $app_mode : 'CULTURA',
-                'questions_payload'   => wp_json_encode( $questions ),
-                'history'             => wp_json_encode( $history ),
-                'score'               => $score,
-                'completado'          => 1,
-                'created_at'          => current_time( 'mysql' ),
-                'updated_at'          => current_time( 'mysql' ),
-            ),
-            array( '%d', '%d', '%s', '%s', '%s', '%f', '%d', '%s', '%s' )
+        $data = array(
+            'quizz_definicion_id' => $quizz_definicion_id,
+            'user_id'             => get_current_user_id(),
+            'app_mode'            => $app_mode ? $app_mode : 'CULTURA',
+            'questions_payload'   => wp_json_encode( $questions ),
+            'history'             => wp_json_encode( $history ),
+            'score'               => $score,
+            'completado'          => 1,
+            'created_at'          => current_time( 'mysql' ),
+            'updated_at'          => current_time( 'mysql' ),
         );
+
+        $formats = array( '%d', '%d', '%s', '%s', '%s', '%f', '%d', '%s', '%s' );
+
+        if ( null !== $language ) {
+            $data['language'] = sanitize_text_field( (string) $language );
+            $formats[]        = '%s';
+        }
+
+        if ( null !== $topic ) {
+            $data['topic'] = sanitize_text_field( (string) $topic );
+            $formats[]     = '%s';
+        }
+
+        if ( null !== $duration_seconds ) {
+            $data['duracion_segundos'] = floatval( $duration_seconds );
+            $formats[]                 = '%f';
+        }
+
+        $inserted = $wpdb->insert( $table, $data, $formats );
 
         if ( false === $inserted ) {
             return new WP_Error( 'cdb_quizz_insert_failed', __( 'Failed to save attempt.', 'cdb-quizz' ) );
