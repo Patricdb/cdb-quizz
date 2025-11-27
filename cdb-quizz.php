@@ -29,6 +29,7 @@ if ( ! defined( 'CDB_QUIZZ_PLUGIN_URL' ) ) {
 
 require_once CDB_QUIZZ_PLUGIN_DIR . 'includes/class-cdb-quizz-activator.php';
 require_once CDB_QUIZZ_PLUGIN_DIR . 'includes/class-cdb-quizz-shortcodes.php';
+require_once CDB_QUIZZ_PLUGIN_DIR . 'includes/class-cdb-quizz-gemini.php';
 require_once CDB_QUIZZ_PLUGIN_DIR . 'includes/class-cdb-quizz-rest.php';
 
 register_activation_hook( CDB_QUIZZ_PLUGIN_FILE, array( 'CDB_Quizz_Activator', 'activate' ) );

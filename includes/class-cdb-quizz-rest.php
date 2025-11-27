@@ -67,7 +67,21 @@ class CDB_Quizz_REST {
      * @return WP_REST_Response
      */
     public function handle_generate( WP_REST_Request $request ) {
-        $slug      = $request->get_param( 'slug' );
+        global $wpdb;
+
+        $slug = sanitize_text_field( $request->get_param( 'slug' ) );
+
+        $definicion = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT id, app_mode, default_language, default_topic, max_preguntas, config_ia FROM {$wpdb->prefix}cdb_quizz_definicion WHERE slug = %s LIMIT 1",
+                $slug
+            )
+        );
+
+        if ( ! $definicion ) {
+            return new WP_Error( 'cdb_quizz_not_found', __( 'Quizz definition not found.', 'cdb-quizz' ), array( 'status' => 404 ) );
+        }
+
         $questions = array(
             array(
                 'id'             => 'q1',
@@ -95,10 +109,33 @@ class CDB_Quizz_REST {
             ),
         );
 
+        if ( defined( 'CDB_QUIZZ_GEMINI_API_KEY' ) && CDB_QUIZZ_GEMINI_API_KEY ) {
+            $gemini = new CDB_Quizz_Gemini();
+
+            $generated_questions = $gemini->generate_questions(
+                array(
+                    'language'      => $definicion->default_language ? $definicion->default_language : 'es',
+                    'topic'         => $definicion->default_topic,
+                    'max_preguntas' => $definicion->max_preguntas ? (int) $definicion->max_preguntas : 3,
+                    'app_mode'      => $definicion->app_mode,
+                )
+            );
+
+            if ( ! is_wp_error( $generated_questions ) && ! empty( $generated_questions ) ) {
+                $questions = $generated_questions;
+            } elseif ( is_wp_error( $generated_questions ) ) {
+                error_log( 'CDB_Quizz_Gemini error: ' . $generated_questions->get_error_message() );
+            }
+        }
+
         $response = array(
-            'ok'        => true,
-            'slug'      => $slug,
-            'questions' => $questions,
+            'ok'                  => true,
+            'slug'                => $slug,
+            'quizz_definicion_id' => (int) $definicion->id,
+            'app_mode'            => $definicion->app_mode,
+            'language'            => $definicion->default_language ? $definicion->default_language : 'es',
+            'topic'               => $definicion->default_topic,
+            'questions'           => $questions,
         );
 
         return rest_ensure_response( $response );
