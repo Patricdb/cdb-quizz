@@ -32,15 +32,23 @@ class CDB_Quizz_Shortcodes {
             true
         );
 
+        wp_register_script(
+            'cdb-quizz-app',
+            CDB_QUIZZ_PLUGIN_URL . 'assets/js/cdb-quizz-app.js',
+            array(),
+            CDB_QUIZZ_VERSION,
+            true
+        );
+
         wp_localize_script(
-            'cdb-quizz-frontend',
+            'cdb-quizz-app',
             'cdbQuizzSettings',
             array(
                 'restUrl' => esc_url_raw( rest_url() ),
             )
         );
 
-        wp_enqueue_script( 'cdb-quizz-frontend' );
+        wp_enqueue_script( 'cdb-quizz-app' );
     }
 
     /**
