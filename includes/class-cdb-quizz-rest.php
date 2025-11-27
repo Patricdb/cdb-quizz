@@ -98,25 +98,36 @@ class CDB_Quizz_REST {
      * Handle generate endpoint.
      *
      * Expected parameters (POST):
-     * - slug (string, required): quiz identifier.
+     * - slug (string, required): quiz identifier used to fetch the quizz_definicion record. Defaults to "demo" when empty.
      *
-     * Response structure example:
+     * Response contract (always HTTP 200 with ok => true and at least mock questions):
+     * - ok (bool): true when the request is processed.
+     * - slug (string): slug received/normalized.
+     * - quizz_definicion_id (int|null): definition id if found, otherwise null.
+     * - app_mode (string): app mode resolved (from DB or default CULTURA).
+     * - language (string): language code resolved (from DB or default es).
+     * - topic (string|null): topic resolved or null when not set.
+     * - source (string): 'gemini' when AI payload is valid, otherwise 'mock'.
+     * - questions (array): list of associative arrays with the normalized quiz questions.
+     *
+     * Example response array:
      * array(
-     *   'ok'                  => true,
+     *   'ok'                  => true, // Always true even if using fallback.
      *   'slug'                => 'demo',
-     *   'quizz_definicion_id' => 12,
+     *   'quizz_definicion_id' => 12, // Null when slug is not in DB.
      *   'app_mode'            => 'CULTURA',
      *   'language'            => 'es',
      *   'topic'               => 'Concepto CdB',
-     *   'source'              => 'mock' or 'gemini',
+     *   'source'              => 'gemini', // Or 'mock' when Gemini is unavailable/invalid.
      *   'questions'           => array(
      *       array(
      *           'id'            => 'q1',
-     *           'questionText'  => '...',
-     *           'options'       => array( '...', '...', '...', '...' ),
-     *           'correctAnswer' => '...',
-     *           'explanation'   => '...',
+     *           'questionText'  => 'Pregunta en el idioma solicitado',
+     *           'options'       => array( 'Opción A', 'Opción B', 'Opción C', 'Opción D' ),
+     *           'correctAnswer' => 'Opción A',
+     *           'explanation'   => 'Explicación breve',
      *           'difficulty'    => 'easy',
+     *           'tags'          => array( 'tag1', 'tag2' ),
      *       ),
      *   ),
      * );
@@ -172,9 +183,19 @@ class CDB_Quizz_REST {
                 )
             );
 
-            if ( ! is_wp_error( $result ) && ! empty( $result['questions'] ) && is_array( $result['questions'] ) ) {
-                $questions = $result['questions'];
-                $source    = 'gemini';
+            if ( ! is_wp_error( $result ) && is_array( $result ) ) {
+                $gemini_questions = null;
+
+                if ( isset( $result['questions'] ) && is_array( $result['questions'] ) ) {
+                    $gemini_questions = $result['questions'];
+                } elseif ( array_values( $result ) === $result ) {
+                    $gemini_questions = $result;
+                }
+
+                if ( ! empty( $gemini_questions ) ) {
+                    $questions = $gemini_questions;
+                    $source    = 'gemini';
+                }
             }
         }
 
