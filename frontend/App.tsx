@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { UserProfile, GameState, Language, Topic, Question, PronunciationFeedback, LeaderboardEntry, GameMode, Opponent, Badge, HistoryEntry, AppMode, AppSettings, QuizSource } from './types';
-import { generateQuestions, evaluatePronunciation, getPronunciationAudio } from './services/geminiService';
+import { evaluatePronunciation, getPronunciationAudio } from './services/geminiService';
+import {
+  generateQuiz,
+  finishQuiz,
+  HistoryEntry as ApiHistoryEntry
+} from './services/wordpressService';
 import { Card } from './components/Card';
 import { 
   Trophy, 
@@ -275,7 +280,11 @@ function pcmToAudioBuffer(data: Uint8Array, ctx: AudioContext, sampleRate: numbe
 
 // --- Main Component ---
 
-export default function App() {
+interface AppProps {
+  slug: string;
+}
+
+const App: React.FC<AppProps> = ({ slug }) => {
   // Global State
   const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [gameState, setGameState] = useState<GameState>(GameState.INTRO);
@@ -297,13 +306,19 @@ export default function App() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isAnswering, setIsAnswering] = useState(false);
   const [isModalExiting, setIsModalExiting] = useState(false); // New state for modal exit animation
-  const [quizTimer, setQuizTimer] = useState(0); 
+  const [quizTimer, setQuizTimer] = useState(0);
   const [timerInterval, setTimerInterval] = useState<number | null>(null);
   const [sessionScore, setSessionScore] = useState(0);
-  const [opponentScore, setOpponentScore] = useState(0); 
+  const [opponentScore, setOpponentScore] = useState(0);
   const [opponentLastScoreTime, setOpponentLastScoreTime] = useState(0); // For animating opponent score
   const [answeredState, setAnsweredState] = useState<'correct' | 'incorrect' | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [remoteQuestions, setRemoteQuestions] = useState<Question[] | null>(null);
+  const [loadingQuestions, setLoadingQuestions] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [sessionHistory, setSessionHistory] = useState<HistoryEntry[]>([]);
+  const [finishStatus, setFinishStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [finishError, setFinishError] = useState<string | null>(null);
   
   // Card Action State (for buttons)
   const [cardAction, setCardAction] = useState<'left' | 'right' | 'up' | 'down' | null>(null);
@@ -346,10 +361,40 @@ export default function App() {
       if (!parsed.selectedAvatar) parsed.selectedAvatar = '🥚';
       if (!parsed.settings) parsed.settings = INITIAL_PROFILE.settings;
       if (!parsed.quizSources) parsed.quizSources = INITIAL_SOURCES;
-      
+
       setProfile(parsed);
     }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoadingQuestions(true);
+      setLoadError(null);
+      try {
+        const res = await generateQuiz(slug);
+        if (!cancelled) {
+          setRemoteQuestions(res.questions);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setLoadError('No se han podido cargar las preguntas.');
+          setRemoteQuestions(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingQuestions(false);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
 
   // Save profile & Level Up/Badge Logic
   useEffect(() => {
@@ -620,50 +665,21 @@ export default function App() {
   const handleStartGame = async () => {
     // Validation based on mode
     if (appMode === AppMode.IDIOMAS && (!selectedLanguage || !selectedTopic)) return;
-    
-    setGameState(GameState.LOADING);
 
-    // Get enabled sources for this mode
-    const enabledSources = profile.quizSources[appMode]
-        ?.filter(src => src.enabled)
-        .map(src => src.name) || [];
-
-    const { questions, usedSources } = await generateQuestions(appMode, selectedLanguage, selectedTopic, enabledSources);
-    
-    // Dynamic Source Update: If Gemini used new sources, add them to the profile
-    if (usedSources && usedSources.length > 0) {
-        setProfile(prev => {
-            const currentSources = prev.quizSources[appMode] || [];
-            const existingNames = new Set(currentSources.map(s => s.name.toLowerCase()));
-            const newSourcesToAdd: QuizSource[] = [];
-
-            usedSources.forEach(srcName => {
-                if (!existingNames.has(srcName.toLowerCase())) {
-                    newSourcesToAdd.push({
-                        id: `src_ai_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                        name: srcName,
-                        type: 'API', // Sources found by AI are API/External
-                        enabled: true
-                    });
-                }
-            });
-
-            if (newSourcesToAdd.length === 0) return prev;
-
-            return {
-                ...prev,
-                quizSources: {
-                    ...prev.quizSources,
-                    [appMode]: [...currentSources, ...newSourcesToAdd]
-                }
-            };
-        });
+    if (loadingQuestions || !remoteQuestions || remoteQuestions.length === 0) {
+      setLoadError('No se han podido cargar las preguntas.');
+      return;
     }
 
-    setDeck(questions);
+    setGameState(GameState.LOADING);
+
+    setDeck(remoteQuestions);
     setCurrentQuestionIndex(0);
     setSessionScore(0);
     setOpponentScore(0);
+    setSessionHistory([]);
+    setFinishStatus('idle');
+    setFinishError(null);
     setGameState(GameState.PLAYING);
   };
 
@@ -748,6 +764,8 @@ export default function App() {
       mode: appMode
     };
 
+    setSessionHistory(prev => [...prev, newHistoryEntry]);
+
     setProfile(prev => {
       const xpGained = isCorrect ? XP_PER_CORRECT : 5;
       const newXp = prev.xp + xpGained; 
@@ -776,6 +794,40 @@ export default function App() {
   const endGame = () => {
     setGameState(GameState.RESULTS);
   };
+
+  const submitResults = useCallback(async () => {
+    if (deck.length === 0 || sessionHistory.length === 0 || finishStatus === 'saving' || finishStatus === 'success') return;
+
+    setFinishStatus('saving');
+    setFinishError(null);
+
+    try {
+      const historyPayload: ApiHistoryEntry[] = sessionHistory.map(entry => ({
+        questionId: entry.questionId,
+        selectedAnswer: entry.selectedAnswer,
+        correctAnswer: entry.correctAnswer,
+        isCorrect: entry.isCorrect,
+      }));
+
+      await finishQuiz({
+        slug,
+        score: sessionScore,
+        app_mode: 'CULTURA',
+        questions: deck,
+        history: historyPayload,
+      });
+      setFinishStatus('success');
+    } catch (error) {
+      setFinishStatus('error');
+      setFinishError('No se ha podido guardar el intento.');
+    }
+  }, [deck, finishStatus, sessionHistory, sessionScore, slug]);
+
+  useEffect(() => {
+    if (gameState === GameState.RESULTS) {
+      submitResults();
+    }
+  }, [gameState, submitResults]);
 
   // Pronunciation
   const startRecording = async () => {
@@ -897,7 +949,7 @@ export default function App() {
       <div className="min-h-screen flex flex-col items-center p-6 text-[#1F2937] transition-colors duration-500" style={appStyle}>
         <header className="w-full max-w-md flex justify-between items-center mb-8 mt-4 animate-in slide-in-from-top duration-500">
           <div className="flex items-center gap-3">
-            <button 
+            <button
               onClick={() => setGameState(GameState.MENU)}
               className="w-12 h-12 bg-[#F2CC8F] rounded-full flex items-center justify-center text-[#1F2937] border-2-charcoal shadow-retro-sm hover:scale-110 transition-transform active:scale-95 group"
             >
@@ -908,13 +960,19 @@ export default function App() {
                 <span>{appMode.replace('CdB_ ', '')}</span>
             </div>
           </div>
-          <button 
-            onClick={() => setGameState(GameState.LEADERBOARD)} 
+          <button
+            onClick={() => setGameState(GameState.LEADERBOARD)}
             className="w-12 h-12 bg-[#98C1D9] rounded-full flex items-center justify-center text-[#1F2937] border-2-charcoal shadow-retro-sm hover:scale-110 transition-transform active:scale-95 group"
           >
             <Trophy size={22} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform" />
           </button>
         </header>
+
+        {loadError && (
+          <div className="w-full max-w-md bg-[#FFE5E5] text-[#E07A5F] border-2 border-[#E07A5F] rounded-xl p-3 text-xs font-bold mb-4">
+            {loadError}
+          </div>
+        )}
 
         <div className="bg-[#FFFBF0] rounded-[24px] p-8 w-full max-w-md text-center mb-8 relative border-2-charcoal shadow-retro animate-pop duration-500">
           <div className="relative inline-block group">
@@ -1873,7 +1931,7 @@ export default function App() {
                   <Share2 size={20} />
                   COMPARTIR RESULTADO
                 </button>
-                <button 
+                <button
                   onClick={() => setGameState(GameState.PROFILE)}
                   className="w-full bg-[#1F2937] text-[#FFFBF0] font-bold py-3 rounded-xl border-2-charcoal shadow-retro active:translate-y-[2px] active:shadow-retro-none transition-all flex items-center justify-center gap-2"
                 >
@@ -1881,6 +1939,15 @@ export default function App() {
                   VOLVER AL PERFIL
                 </button>
            </div>
+           {finishStatus === 'saving' && (
+             <p className="mt-4 text-xs font-bold text-[#3D405B]">Guardando resultado...</p>
+           )}
+           {finishStatus === 'error' && finishError && (
+             <p className="mt-4 text-xs font-bold text-[#E07A5F]">{finishError}</p>
+           )}
+           {finishStatus === 'success' && (
+             <p className="mt-4 text-xs font-bold text-[#81B29A]">Resultado guardado.</p>
+           )}
         </div>
       </div>
     );
@@ -2023,4 +2090,6 @@ export default function App() {
   }
 
   return null;
-}
+};
+
+export default App;
