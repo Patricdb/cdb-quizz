@@ -18,9 +18,19 @@ class CDB_Quizz_Gemini {
         $topic         = isset( $args['topic'] ) ? $args['topic'] : '';
         $max_preguntas = ! empty( $args['max_preguntas'] ) ? (int) $args['max_preguntas'] : 3;
         $app_mode      = isset( $args['app_mode'] ) ? $args['app_mode'] : '';
+        $config_ia     = isset( $args['config_ia'] ) ? $args['config_ia'] : null;
+
+        $model = 'models/gemini-1.5-flash-latest';
+        if ( $config_ia ) {
+            $decoded_config = is_array( $config_ia ) ? $config_ia : json_decode( (string) $config_ia, true );
+            if ( is_array( $decoded_config ) && ! empty( $decoded_config['model'] ) && is_string( $decoded_config['model'] ) ) {
+                $model = 0 === strpos( $decoded_config['model'], 'models/' ) ? $decoded_config['model'] : 'models/' . $decoded_config['model'];
+            }
+        }
 
         $prompt = $this->build_prompt( $language, $topic, $max_preguntas, $app_mode );
         $body   = array(
+            'model'    => $model,
             'contents' => array(
                 array(
                     'parts' => array(
@@ -34,7 +44,7 @@ class CDB_Quizz_Gemini {
 
         $endpoint = add_query_arg(
             array( 'key' => CDB_QUIZZ_GEMINI_API_KEY ),
-            'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent'
+            sprintf( 'https://generativelanguage.googleapis.com/v1beta/%s:generateContent', rawurlencode( $model ) )
         );
 
         $response = wp_remote_post(
@@ -78,10 +88,16 @@ class CDB_Quizz_Gemini {
 
         $questions_data = json_decode( $questions_json, true );
         if ( null === $questions_data || empty( $questions_data['questions'] ) || ! is_array( $questions_data['questions'] ) ) {
-            return new WP_Error( 'cdb_quizz_gemini_invalid_format', __( 'Gemini response does not contain valid questions.', 'cdb-quizz' ) );
+            return new WP_Error( 'cdb_quizz_invalid_ai_payload', __( 'Gemini response does not contain valid questions.', 'cdb-quizz' ) );
         }
 
-        return $this->normalize_questions( $questions_data['questions'] );
+        $normalized = $this->normalize_questions( $questions_data['questions'] );
+
+        if ( empty( $normalized ) ) {
+            return new WP_Error( 'cdb_quizz_invalid_ai_payload', __( 'Gemini response does not contain valid questions.', 'cdb-quizz' ) );
+        }
+
+        return $normalized;
     }
 
     /**
@@ -98,7 +114,7 @@ class CDB_Quizz_Gemini {
         $app_mode   = $app_mode ? sprintf( 'Modo de aplicación: %s.', $app_mode ) : '';
 
         $prompt = sprintf(
-            'Genera exactamente %1$d preguntas de opción múltiple %2$s en idioma %3$s. %4$s Cada pregunta debe incluir: id único, questionText, cuatro options como textos, correctAnswer, explanation y difficulty. Responde únicamente con JSON con la siguiente estructura exacta: {"questions": [{"id": "q1", "questionText": "...", "options": ["...", "...", "...", "..."], "correctAnswer": "...", "explanation": "...", "difficulty": "easy"}]}',
+            'Genera hasta %1$d preguntas de opción múltiple %2$s en idioma %3$s. %4$s Cada pregunta debe incluir id único, questionText, exactamente cuatro options de texto, correctAnswer, explanation y difficulty. Responde solo con un JSON con esta forma exacta: {"questions": [{"id": "q1", "questionText": "...", "options": ["...", "...", "...", "..."], "correctAnswer": "...", "explanation": "...", "difficulty": "easy"}]}. No añadas texto adicional fuera del JSON.',
             $max_preguntas,
             $topic_text,
             $language,
@@ -143,17 +159,13 @@ class CDB_Quizz_Gemini {
     protected function normalize_questions( array $questions_data ) {
         $normalized = array();
 
-        foreach ( $questions_data as $index => $question ) {
-            $options = array();
-            if ( ! empty( $question['options'] ) && is_array( $question['options'] ) ) {
-                foreach ( $question['options'] as $option ) {
-                    $options[] = (string) $option;
-                }
-            }
+        foreach ( $questions_data as $question ) {
+            $options = array_values( (array) ( $question['options'] ?? array() ) );
+            $options = array_map( 'strval', $options );
 
             $normalized[] = array(
-                'id'            => ! empty( $question['id'] ) ? (string) $question['id'] : 'q' . ( $index + 1 ),
-                'questionText'  => isset( $question['questionText'] ) ? (string) $question['questionText'] : ( isset( $question['text'] ) ? (string) $question['text'] : '' ),
+                'id'            => (string) ( $question['id'] ?? '' ),
+                'questionText'  => (string) ( $question['questionText'] ?? ( $question['text'] ?? '' ) ),
                 'options'       => $options,
                 'correctAnswer' => isset( $question['correctAnswer'] ) ? (string) $question['correctAnswer'] : '',
                 'explanation'   => isset( $question['explanation'] ) ? (string) $question['explanation'] : '',
