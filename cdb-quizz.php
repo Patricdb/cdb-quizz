@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       CdB Quizz
  * Description:       Plugin skeleton for CdB Quizz functionality.
- * Version:           0.1.0
+ * Version:           0.1.1
  * Author:            Your Name
  * Text Domain:       cdb-quizz
  */
@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'CDB_QUIZZ_VERSION' ) ) {
-    define( 'CDB_QUIZZ_VERSION', '0.1.0' );
+    define( 'CDB_QUIZZ_VERSION', '0.1.1' );
 }
 
 if ( ! defined( 'CDB_QUIZZ_PLUGIN_FILE' ) ) {
