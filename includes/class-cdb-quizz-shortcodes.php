@@ -8,6 +8,30 @@ class CDB_Quizz_Shortcodes {
      */
     public function __construct() {
         add_shortcode( 'cdb_quizz', array( $this, 'render_quizz' ) );
+        add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+    }
+
+    /**
+     * Enqueue frontend assets for the shortcode.
+     */
+    public function enqueue_assets() {
+        wp_register_script(
+            'cdb-quizz-frontend',
+            CDB_QUIZZ_PLUGIN_URL . 'assets/js/cdb-quizz-frontend.js',
+            array(),
+            CDB_QUIZZ_VERSION,
+            true
+        );
+
+        wp_localize_script(
+            'cdb-quizz-frontend',
+            'cdbQuizzSettings',
+            array(
+                'restUrl' => esc_url_raw( rest_url() ),
+            )
+        );
+
+        wp_enqueue_script( 'cdb-quizz-frontend' );
     }
 
     /**
@@ -33,11 +57,10 @@ class CDB_Quizz_Shortcodes {
         $empleado_id = esc_attr( $atts['empleado_id'] );
 
         return sprintf(
-            '<div class="cdb-quizz-container" data-slug="%s" data-bar-id="%s" data-empleado-id="%s">%s</div>',
+            '<div class="cdb-quizz-container" data-slug="%s" data-bar-id="%s" data-empleado-id="%s"></div>',
             $slug,
             $bar_id,
-            $empleado_id,
-            esc_html__( 'CdB Quizz placeholder', 'cdb-quizz' )
+            $empleado_id
         );
     }
 }
