@@ -58,25 +58,26 @@
             item.appendChild(questionText);
 
             if (Array.isArray(question.options) && question.options.length > 0) {
-                const optionsList = document.createElement('div');
+                const optionsList = document.createElement('ul');
                 const questionId = question.id || `q${index + 1}`;
 
                 question.options.forEach((option, optionIndex) => {
-                    const optionWrapper = document.createElement('label');
+                    const li = document.createElement('li');
+                    const label = document.createElement('label');
                     const input = document.createElement('input');
 
                     input.type = 'radio';
                     input.name = `cdb-quizz-q-${questionId}`;
-                    input.value = optionIndex;
+                    input.value = String(optionIndex);
 
                     input.addEventListener('change', () => {
                         quizState.answers[questionId] = { selectedIndex: optionIndex };
                     });
 
-                    optionWrapper.appendChild(input);
-                    optionWrapper.append(` ${option}`);
-                    optionsList.appendChild(optionWrapper);
-                    optionsList.appendChild(document.createElement('br'));
+                    label.appendChild(input);
+                    label.appendChild(document.createTextNode(` ${option}`));
+                    li.appendChild(label);
+                    optionsList.appendChild(li);
                 });
 
                 item.appendChild(optionsList);
@@ -95,19 +96,22 @@
         statusDiv.className = 'cdb-quizz-status';
 
         finishButton.addEventListener('click', async () => {
-            const finishedAt = Date.now();
-            const durationSeconds = Math.round((finishedAt - quizState.startedAt) / 1000);
+            console.log('[CdB_Quizz] Enviando intento...', { slug, questionsCount: questions.length });
 
-            const history = questions.map((question, idx) => {
-                const id = question.id || `q${idx + 1}`;
+            const finishedAt = Date.now();
+            const durationSeconds = Math.max(0, Math.round((finishedAt - quizState.startedAt) / 1000));
+
+            const history = questions.map((q, idx) => {
+                const id = q.id || `q${idx + 1}`;
                 const answerState = quizState.answers[id] || {};
-                const selectedIndex = typeof answerState.selectedIndex === 'number' ? answerState.selectedIndex : null;
-                const selectedAnswer = selectedIndex !== null && Array.isArray(question.options)
-                    ? question.options[selectedIndex]
+                const selectedIndex = typeof answerState.selectedIndex === 'number'
+                    ? answerState.selectedIndex
                     : null;
-                const hasCorrectAnswer = typeof question.correctAnswer === 'string' && question.correctAnswer.trim() !== '';
-                const correctAnswer = hasCorrectAnswer ? question.correctAnswer : null;
-                const isCorrect = selectedAnswer !== null && correctAnswer !== null && selectedAnswer === correctAnswer;
+                const selectedAnswer = selectedIndex !== null ? q.options[selectedIndex] : null;
+                const correctAnswer = q.correctAnswer || null;
+                const isCorrect = selectedAnswer !== null
+                    && correctAnswer !== null
+                    && selectedAnswer === correctAnswer;
 
                 return {
                     questionId: id,
@@ -148,6 +152,7 @@
                     statusDiv.textContent = 'No se ha podido guardar el intento.';
                 }
             } catch (error) {
+                console.error('[CdB_Quizz] Error al registrar intento', error);
                 statusDiv.textContent = 'No se ha podido guardar el intento.';
             }
         });
